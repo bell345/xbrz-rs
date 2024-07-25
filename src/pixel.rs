@@ -1,9 +1,17 @@
 use std::fmt::{Debug, Formatter};
+use std::mem;
 
-#[derive(Default, Copy, Clone)]
+#[repr(C)]
+#[derive(Default, Copy, Clone, PartialEq, Eq)]
 pub(crate) struct RGB555(u16);
-#[derive(Default, Copy, Clone)]
-pub(crate) struct RGB888(u32);
+
+#[repr(C)]
+#[derive(Default, Copy, Clone, PartialEq, Eq)]
+pub(crate) struct RGB888([u8; 4]);
+
+#[repr(C)]
+#[derive(Default, Copy, Clone, PartialEq, Eq)]
+pub(crate) struct ARGB8888([u8; 4]);
 
 pub(crate) const fn u5_to_u8(v: u8) -> u8 {
     (v << 3) | (v >> 2)
@@ -39,55 +47,6 @@ impl Debug for RGB555 {
     }
 }
 
-impl RGB888 {
-    pub(crate) const fn from_parts(r: u8, g: u8, b: u8) -> Self {
-        Self(
-            ((r as u32) << 16)
-            | ((g as u32) << 8)
-            | (b as u32)
-        )
-    }
-
-    pub(crate) const fn to_parts(self) -> (u8, u8, u8) {
-        (
-            ((self.0 >> 16) & 0xFF) as u8,
-            ((self.0 >> 8) & 0xFF) as u8,
-            (self.0 & 0xFF) as u8
-        )
-    }
-}
-
-impl Debug for RGB888 {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let (r, g, b) = self.to_parts();
-        f.debug_struct("RGB888")
-            .field("repr", &self.0)
-            .field("r",  &r)
-            .field("g", &g)
-            .field("b", &b)
-            .finish()
-    }
-}
-
-impl From<u32> for RGB888 {
-    fn from(value: u32) -> Self {
-        Self(value)
-    }
-}
-
-impl From<RGB888> for u32 {
-    fn from(value: RGB888) -> Self {
-        value.0
-    }
-}
-
-impl From<RGB555> for RGB888 {
-    fn from(value: RGB555) -> Self {
-        let (r, g, b) = value.to_parts();
-        Self::from_parts(r, g, b)
-    }
-}
-
 impl From<u16> for RGB555 {
     fn from(value: u16) -> Self {
         Self(value)
@@ -104,5 +63,87 @@ impl From<RGB888> for RGB555 {
     fn from(value: RGB888) -> Self {
         let (r, g, b) = value.to_parts();
         Self::from_parts(r, g, b)
+    }
+}
+
+impl RGB888 {
+    pub(crate) const fn from_parts(r: u8, g: u8, b: u8) -> Self {
+        Self([
+            0,
+            r,
+            g,
+            b
+        ])
+    }
+
+    pub(crate) const fn to_parts(self) -> (u8, u8, u8) {
+        (
+            self.0[1],
+            self.0[2],
+            self.0[3]
+        )
+    }
+}
+
+impl Debug for RGB888 {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let (r, g, b) = self.to_parts();
+        f.debug_struct("RGB888")
+            .field("repr", &self.0)
+            .field("r",  &r)
+            .field("g", &g)
+            .field("b", &b)
+            .finish()
+    }
+}
+
+impl From<RGB555> for RGB888 {
+    fn from(value: RGB555) -> Self {
+        let (r, g, b) = value.to_parts();
+        Self::from_parts(r, g, b)
+    }
+}
+
+impl From<ARGB8888> for RGB888 {
+    fn from(value: ARGB8888) -> Self {
+        // SAFETY: The internal representation of RGB888 and ARGB8888 are compatible
+        // as they use the same memory layout. Note that the "A" value exists in a "don't care"
+        // portion of the RGB888 backing array.
+        unsafe { mem::transmute(value) }
+    }
+}
+
+impl ARGB8888 {
+    pub(crate) const ZERO: ARGB8888 = ARGB8888([0, 0, 0, 0]);
+    
+    pub(crate) const fn from_rgba_parts(r: u8, g: u8, b: u8, a: u8) -> Self {
+        Self([
+            a,
+            r,
+            g,
+            b
+        ])
+    }
+    
+    pub(crate) const fn to_rgba_parts(self) -> (u8, u8, u8, u8) {
+        (
+            self.0[1],
+            self.0[2],
+            self.0[3],
+            self.0[0]
+        )
+    }
+}
+
+impl Debug for ARGB8888 {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let (r, g, b, a) = self.to_rgba_parts();
+        f.debug_struct("RGB888")
+            .field("repr", &self.0)
+            .field("r",  &r)
+            .field("g", &g)
+            .field("b", &b)
+            .field("a", &a)
+            .finish()
     }
 }
