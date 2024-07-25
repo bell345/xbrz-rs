@@ -1,0 +1,13 @@
+[package]
+name = "xbrz"
+version = "0.1.0"
+authors = ["Thomas Bell <github.com/bell345>"]
+license = "GPL-3"
+edition = "2021"
+
+[dependencies]
+rayon = "1.10"
+bytemuck = { version = "1.16", features = ["must_cast"] }
+
+[features]
+large_lut = []
