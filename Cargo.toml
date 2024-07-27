@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 rayon = "1.10"
 bytemuck = { version = "1.16", features = ["must_cast"] }
+parking_lot = "0.12"
 
 [features]
 large_lut = []

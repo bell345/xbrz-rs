@@ -1,16 +1,18 @@
-use std::sync::OnceLock;
-
 use bytemuck::must_cast;
+use parking_lot::Once;
 
-use crate::pixel::RGB888;
+use crate::pixel::{Argb8, Rgb8};
 
 pub(crate) enum YCbCrLookup {
     IDiff555(Box<[f32]>),
-    IDiff888(Box<[f32]>)
+    IDiff888(Box<[f32]>),
 }
 
-static LOOKUP_INSTANCE: OnceLock<YCbCrLookup> = OnceLock::new();
+// SAFETY: Only written to once by the closure in instance(), which is mediated by a parking_lot::Once.
+static mut LOOKUP_INSTANCE: Option<YCbCrLookup> = None;
+static LOOKUP_LOCK: Once = Once::new();
 
+#[inline]
 fn dist_ycbcr(r_diff: i16, g_diff: i16, b_diff: i16) -> f64 {
     let r_diff = r_diff as f64;
     let g_diff = g_diff as f64;
@@ -32,17 +34,34 @@ fn dist_ycbcr(r_diff: i16, g_diff: i16, b_diff: i16) -> f64 {
 }
 
 impl YCbCrLookup {
+    #[inline]
     pub(crate) fn instance() -> &'static Self {
-        LOOKUP_INSTANCE.get_or_init(|| {
+        Self::initialise();
+
+        unsafe { Self::instance_unchecked() }
+    }
+
+    #[inline]
+    pub(crate) fn initialise() {
+        LOOKUP_LOCK.call_once(|| unsafe {
             #[cfg(feature = "large_lut")]
             {
-                Self::new_large()
+                LOOKUP_INSTANCE = Some(Self::new_large());
             }
             #[cfg(not(feature = "large_lut"))]
             {
-                Self::new_small()
+                LOOKUP_INSTANCE = Some(Self::new_small());
             }
-        })
+        });
+    }
+
+    #[inline]
+    pub(crate) unsafe fn instance_unchecked() -> &'static Self {
+        unsafe { LOOKUP_INSTANCE.as_ref().unwrap_unchecked() }
+    }
+
+    pub(crate) fn instance_is_initialised() -> bool {
+        unsafe { LOOKUP_INSTANCE.is_some() }
     }
 
     pub(crate) fn new_small() -> Self {
@@ -73,23 +92,45 @@ impl YCbCrLookup {
         Self::IDiff888(lookup.into_boxed_slice())
     }
 
-    pub(crate) fn dist_ycbcr(&self, pix1: RGB888, pix2: RGB888) -> f32 {
+    #[inline]
+    pub(crate) fn dist_rgb8(&self, pix1: Rgb8, pix2: Rgb8) -> f32 {
         let (r1, g1, b1) = pix1.to_parts();
         let (r2, g2, b2) = pix2.to_parts();
         let r_part: u8 = must_cast((((r1 as i16) - (r2 as i16)) / 2) as i8);
-        let g_part: u8  = must_cast((((g1 as i16) - (g2 as i16)) / 2) as i8);
+        let g_part: u8 = must_cast((((g1 as i16) - (g2 as i16)) / 2) as i8);
         let b_part: u8 = must_cast((((b1 as i16) - (b2 as i16)) / 2) as i8);
 
         match self {
-            YCbCrLookup::IDiff555(lookup) => lookup[(((r_part as usize) >> 3) << 10) | (((g_part as usize) >> 3) << 5) | ((b_part as usize) >> 3)],
-            YCbCrLookup::IDiff888(lookup) => lookup[((r_part as usize) << 16) | ((g_part as usize) << 8) | (b_part as usize)]
+            YCbCrLookup::IDiff555(lookup) => {
+                lookup[(((r_part as usize) >> 3) << 10)
+                    | (((g_part as usize) >> 3) << 5)
+                    | ((b_part as usize) >> 3)]
+            }
+            YCbCrLookup::IDiff888(lookup) => {
+                lookup[((r_part as usize) << 16) | ((g_part as usize) << 8) | (b_part as usize)]
+            }
+        }
+    }
+
+    #[inline]
+    pub(crate) fn dist_argb8(&self, pix1: Argb8, pix2: Argb8) -> f32 {
+        let a1 = pix1.alpha() as f32 / 255.0;
+        let a2 = pix2.alpha() as f32 / 255.0;
+
+        let rgb1 = Rgb8::from(pix1);
+        let rgb2 = Rgb8::from(pix2);
+        let d = self.dist_rgb8(rgb1, rgb2);
+        if a1 < a2 {
+            a1 * d + 255.0 * (a2 - a1)
+        } else {
+            a2 * d + 255.0 * (a1 - a2)
         }
     }
 }
 
 #[cfg(test)]
 mod test {
-    use crate::pixel::RGB888;
+    use crate::pixel::Rgb8;
     use crate::ycbcr_lookup::{dist_ycbcr, YCbCrLookup};
 
     fn test_lut(lut: &YCbCrLookup, rgb1: (u8, u8, u8), rgb2: (u8, u8, u8)) {
@@ -100,15 +141,15 @@ mod test {
         let b_diff = (b1 as i16) - (b2 as i16);
 
         let dist = dist_ycbcr(r_diff, g_diff, b_diff) as f32;
-        let lut_dist = lut.dist_ycbcr(RGB888::from_parts(r1, g1, b1), RGB888::from_parts(r2, g2, b2));
+        let lut_dist = lut.dist_rgb8(Rgb8::from_parts(r1, g1, b1), Rgb8::from_parts(r2, g2, b2));
         assert_eq!(dist, lut_dist)
     }
-    
+
     fn test_whole_lut(lut: &YCbCrLookup) {
         for r1 in (0..=0xFF).step_by(16) {
             for g1 in (0..=0xFF).step_by(16) {
-                for b1 in (0..=0xFF).step_by(16)  {
-                    for r2 in (0..=0xFF).step_by(16)  {
+                for b1 in (0..=0xFF).step_by(16) {
+                    for r2 in (0..=0xFF).step_by(16) {
                         for g2 in (0..=0xFF).step_by(16) {
                             for b2 in (0..=0xFF).step_by(16) {
                                 test_lut(lut, (r1, g1, b1), (r2, g2, b2))
