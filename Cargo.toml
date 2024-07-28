@@ -2,7 +2,7 @@
 name = "xbrz-rs"
 version = "0.1.0"
 authors = ["Thomas Bell <github.com/bell345>", "Zenju <zenju@gmx.de>"]
-license = "GPL-3"
+license = "GPL-3.0-only"
 edition = "2021"
 description = "A high quality image upscaling algorithm designed to preserve key details in low-resolution pixel art."
 keywords = ["pixel-art", "upscaling", "image"]
