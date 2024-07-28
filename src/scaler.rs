@@ -236,33 +236,295 @@ pub(crate) trait Scaler<const SCALE: usize> {
     }
 }
 
+macro_rules! blend {
+    ($m:literal / $n:literal, $out:ident [$x:literal, $y:literal], $col:ident) => {
+        alpha_grad::<P, $m, $n>($out.rotated_ref::<$x, $y>(), $col);
+    };
+}
+
+macro_rules! set {
+    ($out:ident [$x:literal, $y:literal], $col:ident) => {
+        *$out.rotated_ref::<$x, $y>() = $col;
+    };
+}
+
 pub(crate) struct Scaler2x;
 
 impl Scaler<2> for Scaler2x {
     fn blend_line_shallow<P: Pixel, const R: u8>(col: P, out: &mut OutputMatrix<P, 2, R>) {
-        alpha_grad::<P, 1, 4>(out.rotated_ref::<1, 0>(), col);
-        alpha_grad::<P, 3, 4>(out.rotated_ref::<1, 1>(), col);
+        blend!(1/4, out[1, 0], col);
+        blend!(3/4, out[1, 1], col);
     }
 
     fn blend_line_steep<P: Pixel, const R: u8>(col: P, out: &mut OutputMatrix<P, 2, R>) {
-        alpha_grad::<P, 1, 4>(out.rotated_ref::<0, 1>(), col);
-        alpha_grad::<P, 3, 4>(out.rotated_ref::<1, 1>(), col);
+        blend!(1/4, out[0, 1], col);
+        blend!(3/4, out[1, 1], col);
     }
 
     fn blend_line_steep_and_shallow<P: Pixel, const R: u8>(
         col: P,
         out: &mut OutputMatrix<P, 2, R>,
     ) {
-        alpha_grad::<P, 1, 4>(out.rotated_ref::<1, 0>(), col);
-        alpha_grad::<P, 1, 4>(out.rotated_ref::<0, 1>(), col);
-        alpha_grad::<P, 5, 6>(out.rotated_ref::<1, 1>(), col);
+        blend!(1/4, out[1, 0], col);
+        blend!(1/4, out[0, 1], col);
+        blend!(5/6, out[1, 1], col);
     }
 
     fn blend_line_diagonal<P: Pixel, const R: u8>(col: P, out: &mut OutputMatrix<P, 2, R>) {
-        alpha_grad::<P, 1, 2>(out.rotated_ref::<1, 1>(), col);
+        blend!(1/2, out[1, 1], col);
     }
 
     fn blend_corner<P: Pixel, const R: u8>(col: P, out: &mut OutputMatrix<P, 2, R>) {
-        alpha_grad::<P, 21, 100>(out.rotated_ref::<1, 1>(), col);
+        blend!(21/100, out[1, 1], col);
+    }
+}
+
+pub(crate) struct Scaler3x;
+
+impl Scaler<3> for Scaler3x {
+    fn blend_line_shallow<P: Pixel, const R: u8>(col: P, out: &mut OutputMatrix<P, 3, R>) {
+        blend!(1/4, out[2, 0], col);
+        blend!(1/4, out[1, 2], col);
+        blend!(3/4, out[2, 1], col);
+        set!(out[2, 2], col);
+    }
+
+    fn blend_line_steep<P: Pixel, const R: u8>(col: P, out: &mut OutputMatrix<P, 3, R>) {
+        blend!(1/4, out[0, 2], col);
+        blend!(1/4, out[2, 1], col);
+
+        blend!(3/4, out[1, 2], col);
+        set!(out[2, 2], col);
+    }
+
+    fn blend_line_steep_and_shallow<P: Pixel, const R: u8>(
+        col: P,
+        out: &mut OutputMatrix<P, 3, R>,
+    ) {
+        blend!(1/4, out[2, 0], col);
+        blend!(1/4, out[0, 2], col);
+
+        blend!(3/4, out[2, 1], col);
+        blend!(3/4, out[1, 2], col);
+        set!(out[2, 2], col);
+    }
+
+    fn blend_line_diagonal<P: Pixel, const R: u8>(col: P, out: &mut OutputMatrix<P, 3, R>) {
+        blend!(1/8, out[1, 2], col);
+        blend!(1/8, out[2, 1], col);
+        blend!(7/8, out[2, 2], col);
+    }
+
+    fn blend_corner<P: Pixel, const R: u8>(col: P, out: &mut OutputMatrix<P, 3, R>) {
+        blend!(45/100, out[2, 2], col);
+    }
+}
+
+pub(crate) struct Scaler4x;
+
+impl Scaler<4> for Scaler4x {
+    fn blend_line_shallow<P: Pixel, const R: u8>(col: P, out: &mut OutputMatrix<P, 4, R>) {
+        blend!(1/4, out[3, 0], col);
+        blend!(1/4, out[2, 2], col);
+
+        blend!(3/4, out[3, 1], col);
+        blend!(3/4, out[2, 3], col);
+
+        set!(out[3, 2], col);
+        set!(out[3, 3], col);
+    }
+
+    fn blend_line_steep<P: Pixel, const R: u8>(col: P, out: &mut OutputMatrix<P, 4, R>) {
+        blend!(1/4, out[0, 3], col);
+        blend!(1/4, out[2, 2], col);
+
+        blend!(3/4, out[1, 3], col);
+        blend!(3/4, out[3, 2], col);
+
+        set!(out[2, 3], col);
+        set!(out[3, 3], col);
+    }
+
+    fn blend_line_steep_and_shallow<P: Pixel, const R: u8>(
+        col: P,
+        out: &mut OutputMatrix<P, 4, R>,
+    ) {
+        blend!(3/4, out[3, 1], col);
+        blend!(3/4, out[1, 3], col);
+        blend!(1/4, out[3, 0], col);
+        blend!(1/4, out[0, 3], col);
+
+        blend!(1/3, out[2, 2], col);
+
+        set!(out[3, 3], col);
+        set!(out[3, 2], col);
+        set!(out[2, 3], col);
+    }
+
+    fn blend_line_diagonal<P: Pixel, const R: u8>(col: P, out: &mut OutputMatrix<P, 4, R>) {
+        blend!(1/2, out[3, 2], col);
+        blend!(1/2, out[2, 3], col);
+        set!(out[3, 3], col);
+    }
+
+    fn blend_corner<P: Pixel, const R: u8>(col: P, out: &mut OutputMatrix<P, 4, R>) {
+        blend!(68/100, out[3, 3], col);
+        blend!(9/100, out[3, 2], col);
+        blend!(9/100, out[2, 3], col);
+    }
+}
+
+pub(crate) struct Scaler5x;
+
+impl Scaler<5> for Scaler5x {
+    fn blend_line_shallow<P: Pixel, const R: u8>(col: P, out: &mut OutputMatrix<P, 5, R>) {
+        blend!(1/4, out[4, 0], col);
+        blend!(1/4, out[3, 2], col);
+        blend!(1/4, out[2, 4], col);
+
+        blend!(3/4, out[4, 1], col);
+        blend!(3/4, out[3, 3], col);
+
+        set!(out[4, 2], col);
+        set!(out[4, 3], col);
+        set!(out[4, 4], col);
+        set!(out[3, 4], col);
+    }
+
+    fn blend_line_steep<P: Pixel, const R: u8>(col: P, out: &mut OutputMatrix<P, 5, R>) {
+        blend!(1/4, out[0, 4], col);
+        blend!(1/4, out[2, 3], col);
+        blend!(1/4, out[4, 2], col);
+
+        blend!(3/4, out[1, 4], col);
+        blend!(3/4, out[3, 3], col);
+
+        set!(out[2, 4], col);
+        set!(out[3, 4], col);
+        set!(out[4, 4], col);
+        set!(out[4, 3], col);
+    }
+
+    fn blend_line_steep_and_shallow<P: Pixel, const R: u8>(
+        col: P,
+        out: &mut OutputMatrix<P, 5, R>,
+    ) {
+        blend!(1/4, out[0, 4], col);
+        blend!(1/4, out[2, 3], col);
+        blend!(3/4, out[1, 4], col);
+
+        blend!(1/4, out[4, 0], col);
+        blend!(1/4, out[3, 2], col);
+        blend!(3/4, out[4, 1], col);
+
+        blend!(2/3, out[3, 3], col);
+
+        set!(out[2, 4], col);
+        set!(out[3, 4], col);
+        set!(out[4, 4], col);
+
+        set!(out[4, 2], col);
+        set!(out[4, 3], col);
+    }
+
+    fn blend_line_diagonal<P: Pixel, const R: u8>(col: P, out: &mut OutputMatrix<P, 5, R>) {
+        blend!(1/8, out[4, 2], col);
+        blend!(1/8, out[3, 3], col);
+        blend!(1/8, out[2, 4], col);
+
+        blend!(7/8, out[4, 3], col);
+        blend!(7/8, out[3, 4], col);
+
+        set!(out[4, 4], col);
+    }
+
+    fn blend_corner<P: Pixel, const R: u8>(col: P, out: &mut OutputMatrix<P, 5, R>) {
+        blend!(86/100, out[4, 4], col);
+        blend!(23/100, out[4, 3], col);
+        blend!(23/100, out[3, 4], col);
+    }
+}
+
+pub(crate) struct Scaler6x;
+
+impl Scaler<6> for Scaler6x {
+    fn blend_line_shallow<P: Pixel, const R: u8>(col: P, out: &mut OutputMatrix<P, 6, R>) {
+        blend!(1/4, out[5, 0], col);
+        blend!(1/4, out[4, 2], col);
+        blend!(1/4, out[3, 4], col);
+
+        blend!(3/4, out[5, 1], col);
+        blend!(3/4, out[4, 3], col);
+        blend!(3/4, out[3, 5], col);
+
+        set!(out[5, 2], col);
+        set!(out[5, 3], col);
+        set!(out[5, 4], col);
+        set!(out[5, 5], col);
+
+        set!(out[4, 4], col);
+        set!(out[4, 5], col);
+    }
+
+    fn blend_line_steep<P: Pixel, const R: u8>(col: P, out: &mut OutputMatrix<P, 6, R>) {
+        blend!(1/4, out[0, 5], col);
+        blend!(1/4, out[2, 4], col);
+        blend!(1/4, out[4, 3], col);
+
+        blend!(3/4, out[1, 5], col);
+        blend!(3/4, out[3, 4], col);
+        blend!(3/4, out[5, 3], col);
+
+        set!(out[2, 5], col);
+        set!(out[3, 5], col);
+        set!(out[4, 5], col);
+        set!(out[5, 5], col);
+
+        set!(out[4, 4], col);
+        set!(out[5, 4], col);
+    }
+
+    fn blend_line_steep_and_shallow<P: Pixel, const R: u8>(
+        col: P,
+        out: &mut OutputMatrix<P, 6, R>,
+    ) {
+        blend!(1/4, out[0, 5], col);
+        blend!(1/4, out[2, 4], col);
+        blend!(3/4, out[1, 5], col);
+        blend!(3/4, out[3, 4], col);
+
+        blend!(1/4, out[5, 0], col);
+        blend!(1/4, out[4, 2], col);
+        blend!(3/4, out[5, 1], col);
+        blend!(3/4, out[4, 3], col);
+
+        set!(out[2, 5], col);
+        set!(out[3, 5], col);
+        set!(out[4, 5], col);
+        set!(out[5, 5], col);
+
+        set!(out[4, 4], col);
+        set!(out[5, 4], col);
+
+        set!(out[5, 2], col);
+        set!(out[5, 3], col);
+    }
+
+    fn blend_line_diagonal<P: Pixel, const R: u8>(col: P, out: &mut OutputMatrix<P, 6, R>) {
+        blend!(1/2, out[5, 3], col);
+        blend!(1/2, out[4, 4], col);
+        blend!(1/2, out[3, 5], col);
+
+        set!(out[4, 5], col);
+        set!(out[5, 5], col);
+        set!(out[5, 4], col);
+    }
+
+    fn blend_corner<P: Pixel, const R: u8>(col: P, out: &mut OutputMatrix<P, 6, R>) {
+        blend!(97/100, out[5, 5], col);
+        blend!(42/100, out[4, 5], col);
+        blend!(42/100, out[5, 4], col);
+        blend!(6/100, out[5, 3], col);
+        blend!(6/100, out[3, 5], col);
     }
 }

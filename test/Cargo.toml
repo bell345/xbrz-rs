@@ -11,5 +11,4 @@ clio = { version = "0.3.5", features = ["clap-parse"] }
 image = { version = "0.25", features = ["png"] }
 
 [features]
-default = ["large_lut"]
 large_lut = ["xbrz-rs/large_lut"]

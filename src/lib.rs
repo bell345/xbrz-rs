@@ -1,16 +1,16 @@
-/// # xbrz
-///
-/// This project is a Rust port of the C++ implementation of the xBRZ pixel scaling algorithm
-/// authored by Zenju. You can download the images C++ version on
-/// [SourceForge](https://sourceforge.net/projects/xbrz/). Both the C++ version and this port are
-/// licensed under the [GNU General Public License v3](https://www.gnu.org/licenses/gpl-3.0).
-///
+//! A high quality image upscaling algorithm designed to preserve key details in low-resolution pixel art.
+//!
+//! The original version was implemented by C++ by [Zenju](https://sourceforge.net/u/zenju/profile/)
+//! and can be found on [SourceForge](https://sourceforge.net/projects/xbrz/).
+//!
+//! This project is a direct port of xBRZ version 1.8 into Rust.
+//!
 use std::mem;
 
 use crate::config::ScalerConfig;
 use crate::oob_reader::OobReaderTransparent;
-use crate::pixel::{Argb8, Pixel, Rgba8};
-use crate::scaler::{Scaler, Scaler2x};
+use crate::pixel::{Pixel, Rgba8};
+use crate::scaler::{Scaler, Scaler2x, Scaler3x, Scaler4x, Scaler5x, Scaler6x};
 
 mod blend;
 mod config;
@@ -21,10 +21,21 @@ mod pixel;
 mod scaler;
 mod ycbcr_lookup;
 
-pub fn scale_argb(source: &[u8], src_width: usize, src_height: usize, factor: usize) -> Vec<u8> {
-    scale::<Argb8>(source, src_width, src_height, factor)
-}
-
+/// Use the xBRZ algorithm to scale up an image by an integer factor.
+///
+/// The `source` is specified as a flat array of pixels, ordered in left to right, then top to bottom order.
+/// The subpixels are arranged in RGBA order and each channel is 8 bits, such that each pixel takes up 4 bytes.
+///
+/// A newly allocated image is returned as a flat RGBA vector, with image dimensions
+/// `src_width * factor` by `src_height * factor` and total byte length
+/// `src_width * factor * src_height * factor * 4`.
+///
+/// The `factor` may be one of 1, 2, 3, 4, 5 or 6.
+///
+/// # Panics
+///
+/// Panics if the `source` slice length is not exactly equal to `src_width * src_height * 4`,
+/// or if `factor` is not one of 1, 2, 3, 4, 5 or 6.
 pub fn scale_rgba(source: &[u8], src_width: usize, src_height: usize, factor: usize) -> Vec<u8> {
     scale::<Rgba8>(source, src_width, src_height, factor)
 }
@@ -50,6 +61,7 @@ fn scale<P: Pixel>(source: &[u8], src_width: usize, src_height: usize, factor: u
     } else {
         let mut dst_argb = vec![P::default(); src_width * src_height * factor * factor];
         match factor {
+            0 => unreachable!(),
             1 => unreachable!(),
             2 => Scaler2x::scale_image::<P, OobReaderTransparent<P>>(
                 src_argb,
@@ -59,8 +71,39 @@ fn scale<P: Pixel>(source: &[u8], src_width: usize, src_height: usize, factor: u
                 &config,
                 0..src_height,
             ),
-            3..=6 => todo!(),
-            _ => unreachable!(),
+            3 => Scaler3x::scale_image::<P, OobReaderTransparent<P>>(
+                src_argb,
+                dst_argb.as_mut_slice(),
+                src_width,
+                src_height,
+                &config,
+                0..src_height,
+            ),
+            4 => Scaler4x::scale_image::<P, OobReaderTransparent<P>>(
+                src_argb,
+                dst_argb.as_mut_slice(),
+                src_width,
+                src_height,
+                &config,
+                0..src_height,
+            ),
+            5 => Scaler5x::scale_image::<P, OobReaderTransparent<P>>(
+                src_argb,
+                dst_argb.as_mut_slice(),
+                src_width,
+                src_height,
+                &config,
+                0..src_height,
+            ),
+            6 => Scaler6x::scale_image::<P, OobReaderTransparent<P>>(
+                src_argb,
+                dst_argb.as_mut_slice(),
+                src_width,
+                src_height,
+                &config,
+                0..src_height,
+            ),
+            7.. => unreachable!(),
         };
         dst_argb
     };

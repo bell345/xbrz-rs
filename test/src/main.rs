@@ -10,6 +10,9 @@ struct Args {
 
     #[arg(short, long, default_value = "output.png")]
     output: OutputPath,
+
+    #[arg(short, long, default_value_t = 2, value_parser = 2..=6)]
+    scale: i64,
 }
 
 fn main() {
@@ -25,7 +28,7 @@ fn main() {
 
     let width = in_image.width();
     let height = in_image.height();
-    let factor = 2;
+    let factor = args.scale as u32;
 
     let rgba = RgbaImage::from(in_image);
     let out_rgba = xbrz::scale_rgba(&rgba, width as usize, height as usize, factor as usize);
