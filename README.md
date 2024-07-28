@@ -59,15 +59,15 @@ Also see the [test/images](./test/images) directory for examples at more scaling
 
 ## Sample I
 
-|                             Nearest Neighbour x3                             |                    xBRZ algorithm (xbrz-rs) x3                    |
-|:----------------------------------------------------------------------------:|:-----------------------------------------------------------------:|
-| ![Sample one, nearest neighbour scaled 3x](./test/images/sample I.nn.x3.png) | ![Sample one, xBRZ scaled 3x](./test/images/sample I.xbrz.x3.png) |
+|                            Nearest Neighbour x3                             |                   xBRZ algorithm (xbrz-rs) x3                    |
+|:---------------------------------------------------------------------------:|:----------------------------------------------------------------:|
+| ![Sample one, nearest neighbour scaled 3x](./test/images/sample1.nn.x3.png) | ![Sample one, xBRZ scaled 3x](./test/images/sample1.xbrz.x3.png) |
 
 ## Sample II
 
-|                             Nearest Neighbour x3                              |                    xBRZ algorithm (xbrz-rs) x3                     |
-|:-----------------------------------------------------------------------------:|:------------------------------------------------------------------:|
-| ![Sample two, nearest neighbour scaled 3x](./test/images/sample II.nn.x3.png) | ![Sample two, xBRZ scaled 3x](./test/images/sample II.xbrz.x3.png) |
+|                            Nearest Neighbour x3                             |                   xBRZ algorithm (xbrz-rs) x3                    |
+|:---------------------------------------------------------------------------:|:----------------------------------------------------------------:|
+| ![Sample two, nearest neighbour scaled 3x](./test/images/sample2.nn.x3.png) | ![Sample two, xBRZ scaled 3x](./test/images/sample2.xbrz.x3.png) |
 
 ## Yoshi
 
