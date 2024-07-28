@@ -1,0 +1,15 @@
+[package]
+name = "xbrz_test"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+xbrz-rs = { path = ".." }
+clap = { version = "4.5", features = ["derive"] }
+clio = { version = "0.3.5", features = ["clap-parse"] }
+image = { version = "0.25", features = ["png"] }
+
+[features]
+default = ["large_lut"]
+large_lut = ["xbrz-rs/large_lut"]

@@ -1,6 +1,16 @@
 use std::fmt::{Debug, Formatter};
 use std::mem;
 
+pub(crate) trait Pixel: Debug + Default + Copy + Clone + PartialEq + Eq + Sized {
+    const SIZE: usize = mem::size_of::<Self>();
+
+    fn from_rgba(rgba: [u8; 4]) -> Self;
+
+    fn alpha(self) -> u8;
+    fn to_rgb(self) -> [u8; 3];
+    fn gradient<const M: usize, const N: usize>(front: Self, back: Self) -> Self;
+}
+
 #[repr(C)]
 #[derive(Default, Copy, Clone, PartialEq, Eq)]
 pub(crate) struct RGB555(u16);
@@ -104,69 +114,103 @@ impl From<Argb8> for Rgb8 {
     }
 }
 
+impl Pixel for Rgb8 {
+    fn from_rgba(rgba: [u8; 4]) -> Self {
+        Self([rgba[3], rgba[0], rgba[1], rgba[2]])
+    }
+
+    fn alpha(self) -> u8 {
+        255
+    }
+
+    fn to_rgb(self) -> [u8; 3] {
+        [self.0[1], self.0[2], self.0[3]]
+    }
+
+    fn gradient<const M: usize, const N: usize>(front: Self, back: Self) -> Self {
+        todo!()
+    }
+}
+
 impl Argb8 {
-    pub(crate) const ZERO: Argb8 = Argb8([0, 0, 0, 0]);
-
-    #[inline(always)]
-    pub(crate) const fn red(self) -> u8 {
-        self.0[1]
-    }
-    #[inline(always)]
-    pub(crate) const fn green(self) -> u8 {
-        self.0[2]
-    }
-    #[inline(always)]
-    pub(crate) const fn blue(self) -> u8 {
-        self.0[3]
-    }
-    #[inline(always)]
-    pub(crate) const fn alpha(self) -> u8 {
-        self.0[0]
-    }
-
-    pub(crate) const fn from_rgba_parts(r: u8, g: u8, b: u8, a: u8) -> Self {
-        Self([a, r, g, b])
-    }
-
     pub(crate) const fn to_rgba_parts(self) -> (u8, u8, u8, u8) {
         (self.0[1], self.0[2], self.0[3], self.0[0])
     }
+}
 
-    pub(crate) fn gradient<const M: usize, const N: usize>(front: Self, back: Self) -> Self {
-        debug_assert!(0 < M && M < N && N <= 1000);
+fn gradient_rgba<P: Pixel, const M: usize, const N: usize>(front: P, back: P) -> P {
+    debug_assert!(0 < M && M < N && N <= 1000);
 
-        let weight_front = front.alpha() as usize * M;
-        let weight_back = back.alpha() as usize * (N - M);
-        let weight_sum = weight_front + weight_back;
+    let weight_front = front.alpha() as usize * M;
+    let weight_back = back.alpha() as usize * (N - M);
+    let weight_sum = weight_front + weight_back;
 
-        if weight_sum == 0 {
-            return Self::ZERO;
-        }
+    if weight_sum == 0 {
+        return P::default();
+    }
 
-        macro_rules! calc_color {
-            ($x:ident) => {
-                (front.$x() as usize * weight_front + back.$x() as usize * weight_back) / weight_sum
-            };
-        }
+    let [fr, fg, fb] = front.to_rgb();
+    let [br, bg, bb] = back.to_rgb();
 
-        Self::from_rgba_parts(
-            calc_color!(red) as u8,
-            calc_color!(green) as u8,
-            calc_color!(blue) as u8,
-            (weight_sum / N) as u8,
-        )
+    P::from_rgba([
+        ((fr as usize * weight_front + br as usize * weight_back) / weight_sum) as u8,
+        ((fg as usize * weight_front + bg as usize * weight_back) / weight_sum) as u8,
+        ((fb as usize * weight_front + bb as usize * weight_back) / weight_sum) as u8,
+        (weight_sum / N) as u8,
+    ])
+}
+
+impl Pixel for Argb8 {
+    fn from_rgba(rgba: [u8; 4]) -> Self {
+        Self([rgba[3], rgba[0], rgba[1], rgba[2]])
+    }
+
+    #[inline(always)]
+    fn alpha(self) -> u8 {
+        self.0[0]
+    }
+
+    fn to_rgb(self) -> [u8; 3] {
+        [self.0[1], self.0[2], self.0[3]]
+    }
+
+    fn gradient<const M: usize, const N: usize>(front: Self, back: Self) -> Self {
+        gradient_rgba::<Self, M, N>(front, back)
     }
 }
 
 impl Debug for Argb8 {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let (r, g, b, a) = self.to_rgba_parts();
-        f.debug_struct("RGB888")
-            .field("repr", &self.0)
-            .field("r", &r)
-            .field("g", &g)
-            .field("b", &b)
-            .field("a", &a)
-            .finish()
+        write!(f, "{:02x}{:02x}{:02x}{:02x}", r, g, b, a)
+    }
+}
+
+#[repr(C)]
+#[derive(Default, Copy, Clone, PartialEq, Eq)]
+pub(crate) struct Rgba8([u8; 4]);
+
+impl Debug for Rgba8 {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let [r, g, b, a] = self.0;
+        write!(f, "{:02x}{:02x}{:02x}{:02x}", r, g, b, a)
+    }
+}
+
+impl Pixel for Rgba8 {
+    fn from_rgba(rgba: [u8; 4]) -> Self {
+        Self(rgba)
+    }
+
+    fn alpha(self) -> u8 {
+        self.0[3]
+    }
+
+    fn to_rgb(self) -> [u8; 3] {
+        [self.0[0], self.0[1], self.0[2]]
+    }
+
+    fn gradient<const M: usize, const N: usize>(front: Self, back: Self) -> Self {
+        gradient_rgba::<Self, M, N>(front, back)
     }
 }

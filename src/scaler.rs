@@ -5,11 +5,11 @@ use crate::config::ScalerConfig;
 use crate::kernel::{Kernel4x4, Rotation, RotKernel3x3};
 use crate::matrix::OutputMatrix;
 use crate::oob_reader::OobReader;
-use crate::pixel::Argb8;
+use crate::pixel::Pixel;
 use crate::ycbcr_lookup::YCbCrLookup;
 
-fn alpha_grad<const M: usize, const N: usize>(pix_back: &mut Argb8, pix_front: Argb8) {
-    *pix_back = Argb8::gradient::<M, N>(pix_front, *pix_back);
+fn alpha_grad<P: Pixel, const M: usize, const N: usize>(pix_back: &mut P, pix_front: P) {
+    *pix_back = P::gradient::<M, N>(pix_front, *pix_back);
 }
 
 fn fill_block<T: Copy>(
@@ -19,8 +19,6 @@ fn fill_block<T: Copy>(
     block_width: usize,
     block_height: usize,
 ) {
-    debug_assert!(destination.len() >= block_height * row_length);
-
     let i_range = (0..(block_height * row_length)).step_by(row_length);
     for i in i_range {
         for cell in &mut destination[i..i + block_width] {
@@ -30,15 +28,18 @@ fn fill_block<T: Copy>(
 }
 
 pub(crate) trait Scaler<const SCALE: usize> {
-    fn blend_line_shallow<const R: u8>(col: Argb8, out: &mut OutputMatrix<SCALE, R>);
-    fn blend_line_steep<const R: u8>(col: Argb8, out: &mut OutputMatrix<SCALE, R>);
-    fn blend_line_steep_and_shallow<const R: u8>(col: Argb8, out: &mut OutputMatrix<SCALE, R>);
-    fn blend_line_diagonal<const R: u8>(col: Argb8, out: &mut OutputMatrix<SCALE, R>);
-    fn blend_corner<const R: u8>(col: Argb8, out: &mut OutputMatrix<SCALE, R>);
+    fn blend_line_shallow<P: Pixel, const R: u8>(col: P, out: &mut OutputMatrix<P, SCALE, R>);
+    fn blend_line_steep<P: Pixel, const R: u8>(col: P, out: &mut OutputMatrix<P, SCALE, R>);
+    fn blend_line_steep_and_shallow<P: Pixel, const R: u8>(
+        col: P,
+        out: &mut OutputMatrix<P, SCALE, R>,
+    );
+    fn blend_line_diagonal<P: Pixel, const R: u8>(col: P, out: &mut OutputMatrix<P, SCALE, R>);
+    fn blend_corner<P: Pixel, const R: u8>(col: P, out: &mut OutputMatrix<P, SCALE, R>);
 
-    fn blend_pixel<const R: u8>(
-        kernel: RotKernel3x3<'_, R>,
-        destination: &mut [Argb8],
+    fn blend_pixel<P: Pixel, const R: u8>(
+        kernel: RotKernel3x3<'_, P, R>,
+        destination: &mut [P],
         dest_width: usize,
         blend_info: Blend2x2,
         config: &ScalerConfig,
@@ -54,7 +55,7 @@ pub(crate) trait Scaler<const SCALE: usize> {
 
         macro_rules! dist {
             ($x:ident, $y:ident) => {
-                ycbcr.dist_argb8(kernel.$x(), kernel.$y())
+                ycbcr.dist(kernel.$x(), kernel.$y())
             };
         }
         macro_rules! eq {
@@ -97,7 +98,7 @@ pub(crate) trait Scaler<const SCALE: usize> {
             kernel.h()
         };
 
-        let mut out = OutputMatrix::<SCALE, R>::new(destination, dest_width);
+        let mut out = OutputMatrix::<P, SCALE, R>::new(destination, dest_width);
 
         if do_line_blend {
             let fg = dist!(f, g);
@@ -119,9 +120,9 @@ pub(crate) trait Scaler<const SCALE: usize> {
         }
     }
 
-    fn scale_image<'src, OOB: OobReader<'src>>(
-        source: &'src [Argb8],
-        destination: &mut [Argb8],
+    fn scale_image<'src, P: Pixel, OOB: OobReader<'src, P>>(
+        source: &'src [P],
+        destination: &mut [P],
         src_width: usize,
         src_height: usize,
         config: &ScalerConfig,
@@ -220,10 +221,10 @@ pub(crate) trait Scaler<const SCALE: usize> {
                 fill_block(out, dest_width, kernel.f, SCALE, SCALE);
 
                 if blend_xy.blending_needed() {
-                    let rot_0 = RotKernel3x3::<{ Rotation::None as u8 }>::new(&kernel);
-                    let rot_90 = RotKernel3x3::<{ Rotation::Clockwise90 as u8 }>::new(&kernel);
-                    let rot_180 = RotKernel3x3::<{ Rotation::Clockwise180 as u8 }>::new(&kernel);
-                    let rot_270 = RotKernel3x3::<{ Rotation::Clockwise270 as u8 }>::new(&kernel);
+                    let rot_0 = RotKernel3x3::<P, { Rotation::None as u8 }>::new(&kernel);
+                    let rot_90 = RotKernel3x3::<P, { Rotation::Clockwise90 as u8 }>::new(&kernel);
+                    let rot_180 = RotKernel3x3::<P, { Rotation::Clockwise180 as u8 }>::new(&kernel);
+                    let rot_270 = RotKernel3x3::<P, { Rotation::Clockwise270 as u8 }>::new(&kernel);
 
                     Self::blend_pixel(rot_0, out, dest_width, blend_xy, config);
                     Self::blend_pixel(rot_90, out, dest_width, blend_xy, config);
@@ -238,27 +239,30 @@ pub(crate) trait Scaler<const SCALE: usize> {
 pub(crate) struct Scaler2x;
 
 impl Scaler<2> for Scaler2x {
-    fn blend_line_shallow<const R: u8>(col: Argb8, out: &mut OutputMatrix<2, R>) {
-        alpha_grad::<1, 4>(out.rotated_ref::<1, 0>(), col);
-        alpha_grad::<3, 4>(out.rotated_ref::<1, 1>(), col);
+    fn blend_line_shallow<P: Pixel, const R: u8>(col: P, out: &mut OutputMatrix<P, 2, R>) {
+        alpha_grad::<P, 1, 4>(out.rotated_ref::<1, 0>(), col);
+        alpha_grad::<P, 3, 4>(out.rotated_ref::<1, 1>(), col);
     }
 
-    fn blend_line_steep<const R: u8>(col: Argb8, out: &mut OutputMatrix<2, R>) {
-        alpha_grad::<1, 4>(out.rotated_ref::<0, 1>(), col);
-        alpha_grad::<3, 4>(out.rotated_ref::<1, 1>(), col);
+    fn blend_line_steep<P: Pixel, const R: u8>(col: P, out: &mut OutputMatrix<P, 2, R>) {
+        alpha_grad::<P, 1, 4>(out.rotated_ref::<0, 1>(), col);
+        alpha_grad::<P, 3, 4>(out.rotated_ref::<1, 1>(), col);
     }
 
-    fn blend_line_steep_and_shallow<const R: u8>(col: Argb8, out: &mut OutputMatrix<2, R>) {
-        alpha_grad::<1, 4>(out.rotated_ref::<1, 0>(), col);
-        alpha_grad::<1, 4>(out.rotated_ref::<0, 1>(), col);
-        alpha_grad::<5, 6>(out.rotated_ref::<1, 1>(), col);
+    fn blend_line_steep_and_shallow<P: Pixel, const R: u8>(
+        col: P,
+        out: &mut OutputMatrix<P, 2, R>,
+    ) {
+        alpha_grad::<P, 1, 4>(out.rotated_ref::<1, 0>(), col);
+        alpha_grad::<P, 1, 4>(out.rotated_ref::<0, 1>(), col);
+        alpha_grad::<P, 5, 6>(out.rotated_ref::<1, 1>(), col);
     }
 
-    fn blend_line_diagonal<const R: u8>(col: Argb8, out: &mut OutputMatrix<2, R>) {
-        alpha_grad::<1, 2>(out.rotated_ref::<1, 1>(), col);
+    fn blend_line_diagonal<P: Pixel, const R: u8>(col: P, out: &mut OutputMatrix<P, 2, R>) {
+        alpha_grad::<P, 1, 2>(out.rotated_ref::<1, 1>(), col);
     }
 
-    fn blend_corner<const R: u8>(col: Argb8, out: &mut OutputMatrix<2, R>) {
-        alpha_grad::<21, 100>(out.rotated_ref::<1, 1>(), col);
+    fn blend_corner<P: Pixel, const R: u8>(col: P, out: &mut OutputMatrix<P, 2, R>) {
+        alpha_grad::<P, 21, 100>(out.rotated_ref::<1, 1>(), col);
     }
 }

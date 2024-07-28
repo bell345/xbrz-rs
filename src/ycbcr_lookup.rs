@@ -1,7 +1,7 @@
 use bytemuck::must_cast;
 use parking_lot::Once;
 
-use crate::pixel::{Argb8, Rgb8};
+use crate::pixel::Pixel;
 
 pub(crate) enum YCbCrLookup {
     IDiff555(Box<[f32]>),
@@ -93,9 +93,9 @@ impl YCbCrLookup {
     }
 
     #[inline]
-    pub(crate) fn dist_rgb8(&self, pix1: Rgb8, pix2: Rgb8) -> f32 {
-        let (r1, g1, b1) = pix1.to_parts();
-        let (r2, g2, b2) = pix2.to_parts();
+    pub(crate) fn dist_rgb(&self, rgb1: [u8; 3], rgb2: [u8; 3]) -> f32 {
+        let [r1, g1, b1] = rgb1;
+        let [r2, g2, b2] = rgb2;
         let r_part: u8 = must_cast((((r1 as i16) - (r2 as i16)) / 2) as i8);
         let g_part: u8 = must_cast((((g1 as i16) - (g2 as i16)) / 2) as i8);
         let b_part: u8 = must_cast((((b1 as i16) - (b2 as i16)) / 2) as i8);
@@ -112,14 +112,11 @@ impl YCbCrLookup {
         }
     }
 
-    #[inline]
-    pub(crate) fn dist_argb8(&self, pix1: Argb8, pix2: Argb8) -> f32 {
-        let a1 = pix1.alpha() as f32 / 255.0;
-        let a2 = pix2.alpha() as f32 / 255.0;
+    pub(crate) fn dist<P: Pixel>(&self, pix1: P, pix2: P) -> f32 {
+        let a1 = pix1.alpha() as f32 / u8::MAX as f32;
+        let a2 = pix2.alpha() as f32 / u8::MAX as f32;
 
-        let rgb1 = Rgb8::from(pix1);
-        let rgb2 = Rgb8::from(pix2);
-        let d = self.dist_rgb8(rgb1, rgb2);
+        let d = self.dist_rgb(pix1.to_rgb(), pix2.to_rgb());
         if a1 < a2 {
             a1 * d + 255.0 * (a2 - a1)
         } else {
@@ -141,7 +138,7 @@ mod test {
         let b_diff = (b1 as i16) - (b2 as i16);
 
         let dist = dist_ycbcr(r_diff, g_diff, b_diff) as f32;
-        let lut_dist = lut.dist_rgb8(Rgb8::from_parts(r1, g1, b1), Rgb8::from_parts(r2, g2, b2));
+        let lut_dist = lut.dist(Rgb8::from_parts(r1, g1, b1), Rgb8::from_parts(r2, g2, b2));
         assert_eq!(dist, lut_dist)
     }
 

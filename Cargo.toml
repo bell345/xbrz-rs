@@ -1,9 +1,12 @@
 [package]
-name = "xbrz"
+name = "xbrz-rs"
 version = "0.1.0"
 authors = ["Thomas Bell <github.com/bell345>", "Zenju <zenju@gmx.de>"]
 license = "GPL-3"
 edition = "2021"
+
+[lib]
+name = "xbrz"
 
 [dependencies]
 rayon = "1.10"

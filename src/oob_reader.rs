@@ -3,24 +3,24 @@ use std::ops::Range;
 use std::ptr;
 
 use crate::kernel::Kernel4x4;
-use crate::pixel::Argb8;
+use crate::pixel::Pixel;
 
-pub(crate) trait OobReader<'src> {
-    fn new(src: &'src [Argb8], width: usize, height: usize, y: isize) -> Self;
-    fn fill_dhlp(&self, kernel: &mut Kernel4x4, x: isize);
+pub(crate) trait OobReader<'src, P: Pixel> {
+    fn new(src: &'src [P], width: usize, height: usize, y: isize) -> Self;
+    fn fill_dhlp(&self, kernel: &mut Kernel4x4<P>, x: isize);
 }
 
-pub(crate) struct OobReaderTransparent<'src> {
-    src_ym1: *const Argb8,
-    src_y: *const Argb8,
-    src_yp1: *const Argb8,
-    src_yp2: *const Argb8,
+pub(crate) struct OobReaderTransparent<'src, P: Pixel> {
+    src_ym1: *const P,
+    src_y: *const P,
+    src_yp1: *const P,
+    src_yp2: *const P,
     x_range: Range<isize>,
-    _marker: PhantomData<&'src [Argb8]>,
+    _marker: PhantomData<&'src [P]>,
 }
 
-impl<'src> OobReader<'src> for OobReaderTransparent<'src> {
-    fn new(src: &'src [Argb8], width: usize, height: usize, y: isize) -> Self {
+impl<'src, P: Pixel> OobReader<'src, P> for OobReaderTransparent<'src, P> {
+    fn new(src: &'src [P], width: usize, height: usize, y: isize) -> Self {
         assert_eq!(src.len(), width * height);
         let src = src.as_ptr();
         let x_range = 0..(width as isize);
@@ -53,8 +53,8 @@ impl<'src> OobReader<'src> for OobReaderTransparent<'src> {
         }
     }
 
-    fn fill_dhlp(&self, kernel: &mut Kernel4x4, x: isize) {
-        let zero = Argb8::ZERO;
+    fn fill_dhlp(&self, kernel: &mut Kernel4x4<P>, x: isize) {
+        let zero = P::default();
         let x_p2 = x + 2;
 
         if self.x_range.contains(&x_p2) {

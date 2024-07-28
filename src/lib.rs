@@ -1,7 +1,7 @@
 /// # xbrz
 ///
 /// This project is a Rust port of the C++ implementation of the xBRZ pixel scaling algorithm
-/// authored by Zenju. You can download the original C++ version on
+/// authored by Zenju. You can download the images C++ version on
 /// [SourceForge](https://sourceforge.net/projects/xbrz/). Both the C++ version and this port are
 /// licensed under the [GNU General Public License v3](https://www.gnu.org/licenses/gpl-3.0).
 ///
@@ -9,7 +9,7 @@ use std::mem;
 
 use crate::config::ScalerConfig;
 use crate::oob_reader::OobReaderTransparent;
-use crate::pixel::Argb8;
+use crate::pixel::{Argb8, Pixel, Rgba8};
 use crate::scaler::{Scaler, Scaler2x};
 
 mod blend;
@@ -22,15 +22,22 @@ mod scaler;
 mod ycbcr_lookup;
 
 pub fn scale_argb(source: &[u8], src_width: usize, src_height: usize, factor: usize) -> Vec<u8> {
-    const ARGB_SIZE: usize = mem::size_of::<Argb8>();
+    scale::<Argb8>(source, src_width, src_height, factor)
+}
+
+pub fn scale_rgba(source: &[u8], src_width: usize, src_height: usize, factor: usize) -> Vec<u8> {
+    scale::<Rgba8>(source, src_width, src_height, factor)
+}
+
+fn scale<P: Pixel>(source: &[u8], src_width: usize, src_height: usize, factor: usize) -> Vec<u8> {
     const U8_SIZE: usize = mem::size_of::<u8>();
 
     if src_width == 0 || src_height == 0 {
         return vec![];
     }
 
-    assert_eq!(source.len(), src_width * src_height * ARGB_SIZE);
-    let (_, src_argb, _) = unsafe { source.align_to::<Argb8>() };
+    assert_eq!(source.len(), src_width * src_height * P::SIZE);
+    let (_, src_argb, _) = unsafe { source.align_to::<P>() };
     assert_eq!(src_argb.len(), src_width * src_height);
 
     assert!(factor > 0);
@@ -41,10 +48,10 @@ pub fn scale_argb(source: &[u8], src_width: usize, src_height: usize, factor: us
     let dst_argb = if factor == 1 {
         src_argb.to_owned()
     } else {
-        let mut dst_argb = vec![Argb8::ZERO; src_width * src_height * factor * factor];
+        let mut dst_argb = vec![P::default(); src_width * src_height * factor * factor];
         match factor {
             1 => unreachable!(),
-            2 => Scaler2x::scale_image::<OobReaderTransparent>(
+            2 => Scaler2x::scale_image::<P, OobReaderTransparent<P>>(
                 src_argb,
                 dst_argb.as_mut_slice(),
                 src_width,
@@ -62,8 +69,8 @@ pub fn scale_argb(source: &[u8], src_width: usize, src_height: usize, factor: us
         let mut dst_nodrop = mem::ManuallyDrop::new(dst_argb);
         Vec::from_raw_parts(
             dst_nodrop.as_mut_ptr() as *mut u8,
-            dst_nodrop.len() * ARGB_SIZE / U8_SIZE,
-            dst_nodrop.capacity() * ARGB_SIZE / U8_SIZE,
+            dst_nodrop.len() * P::SIZE / U8_SIZE,
+            dst_nodrop.capacity() * P::SIZE / U8_SIZE,
         )
     }
 }

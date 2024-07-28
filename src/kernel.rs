@@ -3,7 +3,7 @@ use std::mem;
 use crate::blend::{Blend2x2, BlendType};
 use crate::config::ScalerConfig;
 use crate::oob_reader::OobReader;
-use crate::pixel::Argb8;
+use crate::pixel::Pixel;
 use crate::ycbcr_lookup::YCbCrLookup;
 
 /// 4x4 kernel with logical positions:
@@ -21,32 +21,47 @@ use crate::ycbcr_lookup::YCbCrLookup;
 /// F is the center pixel.
 #[repr(C)]
 #[derive(Default)]
-pub(crate) struct Kernel4x4 {
-    pub(crate) a: Argb8,
-    pub(crate) b: Argb8,
-    pub(crate) c: Argb8,
+pub(crate) struct Kernel4x4<P: Pixel> {
+    pub(crate) a: P,
+    pub(crate) b: P,
+    pub(crate) c: P,
 
-    pub(crate) e: Argb8,
-    pub(crate) f: Argb8,
-    pub(crate) g: Argb8,
+    pub(crate) e: P,
+    pub(crate) f: P,
+    pub(crate) g: P,
 
-    pub(crate) i: Argb8,
-    pub(crate) j: Argb8,
-    pub(crate) k: Argb8,
+    pub(crate) i: P,
+    pub(crate) j: P,
+    pub(crate) k: P,
 
-    pub(crate) m: Argb8,
-    pub(crate) n: Argb8,
-    pub(crate) o: Argb8,
+    pub(crate) m: P,
+    pub(crate) n: P,
+    pub(crate) o: P,
 
-    pub(crate) d: Argb8,
-    pub(crate) h: Argb8,
-    pub(crate) l: Argb8,
-    pub(crate) p: Argb8,
+    pub(crate) d: P,
+    pub(crate) h: P,
+    pub(crate) l: P,
+    pub(crate) p: P,
 }
 
-impl Kernel4x4 {
+#[repr(C)]
+struct Kernel3x3<P: Pixel> {
+    pub(crate) a: P,
+    pub(crate) b: P,
+    pub(crate) c: P,
+
+    pub(crate) d: P,
+    pub(crate) e: P,
+    pub(crate) f: P,
+
+    pub(crate) g: P,
+    pub(crate) h: P,
+    pub(crate) i: P,
+}
+
+impl<P: Pixel> Kernel4x4<P> {
     #[inline]
-    pub(crate) fn init_row<'src>(oob: &impl OobReader<'src>) -> Self {
+    pub(crate) fn init_row<'src>(oob: &impl OobReader<'src, P>) -> Self {
         let mut kernel = Self::default();
 
         oob.fill_dhlp(&mut kernel, -4);
@@ -73,7 +88,7 @@ impl Kernel4x4 {
     }
 
     #[inline]
-    pub(crate) fn next_column<'src>(&mut self, oob: &impl OobReader<'src>, x: isize) {
+    pub(crate) fn next_column<'src>(&mut self, oob: &impl OobReader<'src, P>, x: isize) {
         self.a = self.b;
         self.e = self.f;
         self.i = self.j;
@@ -95,7 +110,7 @@ impl Kernel4x4 {
     #[inline]
     pub(crate) fn pre_process_corners(&self, cfg: &ScalerConfig) -> Blend2x2 {
         let mut result = Blend2x2::default();
-        let ycbcr_lookup = YCbCrLookup::instance();
+        let ycbcr = YCbCrLookup::instance();
 
         if self.f == self.g && self.j == self.k {
             return result;
@@ -107,7 +122,7 @@ impl Kernel4x4 {
 
         macro_rules! dist {
             ($x:ident, $y:ident) => {
-                ycbcr_lookup.dist_argb8(self.$x, self.$y)
+                ycbcr.dist(self.$x, self.$y)
             };
         }
 
@@ -148,6 +163,11 @@ impl Kernel4x4 {
         }
 
         result
+    }
+
+    fn as_3x3(&self) -> &Kernel3x3<P> {
+        // SAFETY: memory layout of 3x3 is smaller than layout of 4x4
+        unsafe { &*(self as *const Kernel4x4<P> as *const Kernel3x3<P>) }
     }
 }
 
@@ -195,12 +215,12 @@ impl Rotation {
     }
 }
 
-pub(crate) struct RotKernel3x3<'ker, const R: u8>(&'ker Kernel4x4);
+pub(crate) struct RotKernel3x3<'ker, P: Pixel, const R: u8>(&'ker Kernel3x3<P>);
 
 macro_rules! impl_getter {
     ($x:ident, $rot90:ident, $rot180:ident, $rot270:ident) => {
         #[inline]
-        pub(crate) fn $x(&self) -> Argb8 {
+        pub(crate) fn $x(&self) -> P {
             if R == Rotation::None as u8 {
                 self.0.$x
             } else if R == Rotation::Clockwise90 as u8 {
@@ -214,11 +234,11 @@ macro_rules! impl_getter {
     };
 }
 
-impl<'ker, const R: u8> RotKernel3x3<'ker, R> {
+impl<'ker, P: Pixel, const R: u8> RotKernel3x3<'ker, P, R> {
     #[inline]
-    pub(crate) fn new(kernel: &'ker Kernel4x4) -> Self {
+    pub(crate) fn new(kernel: &'ker Kernel4x4<P>) -> Self {
         assert!(R <= Rotation::Clockwise270 as u8);
-        Self(kernel)
+        Self(kernel.as_3x3())
     }
 
     /*impl_getter!(a, g, i, c);*/

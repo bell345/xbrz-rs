@@ -1,6 +1,8 @@
+use std::fmt::{Debug, Display, Formatter};
+
 use crate::kernel::Rotation;
 
-#[derive(Debug, Default, Copy, Clone, PartialEq, Eq)]
+#[derive(Default, Copy, Clone, PartialEq, Eq)]
 pub(crate) enum BlendType {
     #[default]
     None = 0,
@@ -8,7 +10,21 @@ pub(crate) enum BlendType {
     Dominant,
 }
 
-#[derive(Debug, Default, Copy, Clone, PartialEq, Eq)]
+impl Debug for BlendType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                BlendType::None => ".",
+                BlendType::Normal => "N",
+                BlendType::Dominant => "D",
+            }
+        )
+    }
+}
+
+#[derive(Default, Copy, Clone, PartialEq, Eq)]
 pub(crate) struct Blend2x2 {
     // blend_f
     pub top_left: BlendType,
@@ -18,6 +34,13 @@ pub(crate) struct Blend2x2 {
     pub bottom_left: BlendType,
     // blend_k
     pub bottom_right: BlendType,
+}
+
+impl Debug for Blend2x2 {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "{:?}{:?}", self.top_left, self.top_right)?;
+        write!(f, "{:?}{:?}", self.bottom_left, self.bottom_right)
+    }
 }
 
 impl Blend2x2 {
