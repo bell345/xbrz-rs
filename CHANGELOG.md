@@ -10,7 +10,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.0](https://github.com/bell345/xbrz-rs/releases/tag/v0.1.0) - 2024-07-28
 
 ### Other
-
 - Updated license spec
 - Added metadata and badges
 - Add CHANGELOG.md
