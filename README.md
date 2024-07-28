@@ -1,5 +1,9 @@
 # xbrz-rs
 
+![Crates.io version](https://img.shields.io/crates/v/xbrz-rs)
+![docs.rs](https://img.shields.io/docsrs/xbrz-rs)
+![GPL-3.0 license](https://img.shields.io/github/license/bell345/xbrz-rs)
+
 This project is a Rust port of the C++ implementation of the xBRZ pixel scaling algorithm, originally created by Zenju.
 You can download the original C++ version on [SourceForge](https://sourceforge.net/projects/xbrz/).
 Both the C++ version and this port are licensed under
